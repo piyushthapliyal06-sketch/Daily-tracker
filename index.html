@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" style="color-scheme: dark;"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Piyush's Daily Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2f6f4f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tracker">
+<meta name="mobile-web-app-capable" content="yes">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onload="window.__jspdfReady=true" onerror="window.__jspdfFailed=true"></script>
+<script>
+  // Fallback source if cdnjs is blocked on this network
+  window.addEventListener("DOMContentLoaded", function() {
+    setTimeout(function() {
+      if (!window.jspdf && !window.__jspdfReady) {
+        var s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+        s.onload = function() { window.__jspdfReady = true; };
+        document.head.appendChild(s);
+      }
+    }, 1500);
+  });
+  async function waitForJsPDF(timeoutMs) {
+    const start = Date.now();
+    while (!window.jspdf) {
+      if (Date.now() - start > timeoutMs) return false;
+      await new Promise(r => setTimeout(r, 200));
+    }
+    return true;
+  }
+</script>
+<style>
+  :root {
+    --bg: #f7f5f2;
+    --card: #ffffff;
+    --ink: #1f2320;
+    --ink-soft: #6b6f6c;
+    --line: #e6e2db;
+    --accent: #2f6f4f;
+    --accent-soft: #e4f0e9;
+    --done: #2f6f4f;
+    --missed: #c1543f;
+    --pending: #d9a441;
+    --radius: 16px;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181a; --card: #1f2224; --ink: #eceae5; --ink-soft: #9a9d9a;
+      --line: #33373a; --accent: #4f9d76; --accent-soft: #223229;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181a; --card: #1f2224; --ink: #eceae5; --ink-soft: #9a9d9a;
+    --line: #33373a; --accent: #4f9d76; --accent-soft: #223229;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 20px 16px 60px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 4px 0 2px; }
+  .sub { color: var(--ink-soft); font-size: 0.9rem; margin-bottom: 18px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab {
+    padding: 7px 14px; border-radius: 999px; background: var(--card);
+    border: 1px solid var(--line); font-size: 0.85rem; cursor: pointer; color: var(--ink);
+  }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 1.05rem; margin: 0 0 12px; display: flex; align-items: center; justify-content: space-between; }
+  .daypick { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .daypick select, .daypick input[type=date] {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; color: var(--ink); font-size: 0.85rem;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink-soft); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  td.time { white-space: nowrap; color: var(--ink-soft); font-size: 0.8rem; }
+  tr.done td.task { color: var(--ink); }
+  tr.missed td.task { text-decoration: line-through; color: var(--missed); opacity: 0.8; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .status-done { background: var(--done); }
+  .status-missed { background: var(--missed); }
+  .status-pending { background: var(--pending); }
+  .empty { color: var(--ink-soft); font-size: 0.85rem; padding: 10px 0; }
+  .charts { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+  .chart-block { text-align: center; }
+  .chart-label { font-size: 0.78rem; color: var(--ink-soft); margin-top: 6px; }
+  .legend { display: flex; gap: 12px; justify-content: center; margin-top: 8px; flex-wrap: wrap; font-size: 0.75rem; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .row { display: flex; gap: 8px; }
+  .row input, .row button {
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 0.85rem; background: var(--bg); color: var(--ink);
+  }
+  .row input[type=text] { flex: 1; min-width: 0; }
+  .addbtn { background: var(--accent); color: #fff; border: none; padding: 8px 14px; border-radius: 8px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+  .addform { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .addform .row2 { display: flex; gap: 8px; }
+  .addform input[type=time] { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); color: var(--ink); font-size: 0.85rem; }
+  .iconbtn { background: none; border: none; cursor: pointer; font-size: 0.95rem; padding: 2px 6px; color: var(--ink-soft); }
+  .stat-row { display: flex; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
+  .stat { background: var(--accent-soft); border-radius: 10px; padding: 8px 12px; font-size: 0.8rem; }
+  .stat b { display: block; font-size: 1.1rem; color: var(--accent); }
+  .footer-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .pdfbtn {
+    flex: 1; background: var(--ink); color: var(--bg); border: none; padding: 12px; border-radius: 10px;
+    font-size: 0.9rem; cursor: pointer;
+  }
+  .savehint { font-size: 0.72rem; color: var(--ink-soft); text-align: center; margin-top: 8px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
+  }
+</script>
+</head>
+<body>
+<div class="wrap">
+  <h1>📋 Piyush's Daily Tracker</h1>
+  <div class="sub">Tasks, timing, and productivity — day by day, week by week.</div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="day">Day</div>
+    <div class="tab" data-tab="week">Week</div>
+    <div class="tab" data-tab="month">Month</div>
+  </div>
+
+  <div id="day-view" class="view">
+    <div class="card">
+      <h2>
+        <span>Daily Log</span>
+        <select id="day-select"><option value="2026-09-25">Fri, Sep 25</option><option value="2026-09-27">Sun, Sep 27</option><option value="2026-09-28" selected="">Mon, Sep 28</option><option value="2026-09-29">Tue, Sep 29</option><option value="2026-09-30">Wed, Sep 30</option></select>
+      </h2>
+      <div class="stat-row">
+        <div class="stat"><b>3</b>tasks</div>
+        <div class="stat"><b>2</b>done</div>
+        <div class="stat"><b>1</b>missed</div>
+        <div class="stat"><b>4.6h</b>productive</div>
+      </div>
+      <table>
+        <thead><tr><th>Time</th><th>Task</th><th>✓</th><th></th></tr></thead>
+        <tbody>
+    <tr class="done">
+      <td class="time">00:00 – 04:00</td>
+      <td class="task"><span class="status-dot status-done"></span>CAFDP – Fashion Model<div style="font-size:0.75rem;color:var(--ink-soft);margin-top:2px;">Replaced cell 3 and fixed the error. Replaced and modified cells 10A, 10B, and 11B (for a different purpose).</div>
+        <label style="display:flex;align-items:flex-start;gap:6px;margin-top:6px;padding:6px 8px;border-radius:8px;font-size:0.78rem;background:rgba(193,84,63,0.12);border-left:3px solid #c1543f;color:#c1543f;font-weight:600;text-decoration:line-through;opacity:0.6;">
+          <input type="checkbox" checked="" onchange="toggleSub('2026-09-28', 0, 0)" style="margin-top:2px;">
+          <span>❗ Fix duplicated code cells — cells got doubled/tripled while working; delete the extra copies</span>
+        </label></td>
+      <td>✅</td>
+      <td>
+        <button class="iconbtn" onclick="cycleStatus('2026-09-28', 0)">↻</button>
+        <button class="iconbtn" onclick="deleteTask('2026-09-28', 0)">🗑</button>
+      </td>
+    </tr>
+    <tr class="done">
+      <td class="time">~35 min</td>
+      <td class="task"><span class="status-dot status-done"></span>Spanish Study<div style="font-size:0.75rem;color:var(--ink-soft);margin-top:2px;">Learnt frequently used words like Hola, cómo estás, gracias, etc. Watched the same video again, this time writing notes in my notebook.</div></td>
+      <td>✅</td>
+      <td>
+        <button class="iconbtn" onclick="cycleStatus('2026-09-28', 1)">↻</button>
+        <button class="iconbtn" onclick="deleteTask('2026-09-28', 1)">🗑</button>
+      </td>
+    </tr>
+    <tr class="missed">
+      <td class="time">—</td>
+      <td class="task"><span class="status-dot status-missed"></span>Job Research – Travel-Friendly Roles<div style="font-size:0.75rem;color:var(--ink-soft);margin-top:2px;">Look into jobs that let you travel/explore abroad, e.g. options connected to Thailand. Check the links that Purva sent.</div></td>
+      <td>❌</td>
+      <td>
+        <button class="iconbtn" onclick="cycleStatus('2026-09-28', 2)">↻</button>
+        <button class="iconbtn" onclick="deleteTask('2026-09-28', 2)">🗑</button>
+      </td>
+    </tr></tbody>
+      </table>
+      <div class="addform">
+        <div class="row2">
+          <input type="time" id="new-start">
+          <input type="time" id="new-end">
+        </div>
+        <div class="row">
+          <input type="text" id="new-task" placeholder="Task description">
+          <button class="addbtn" onclick="addTask()">Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Today's Breakdown</h2>
+      <div class="charts">
+        <div class="chart-block">
+          <svg width="140" height="140" viewBox="0 0 140 140"><path d="M70,70 L70,0 A70,70 0 1 1 9.37822173508929,105 Z" fill="#2f6f4f"></path><path d="M70,70 L9.37822173508929,105 A70,70 0 0 1 69.99999999999999,0 Z" fill="#c1543f"></path><circle cx="70" cy="70" r="31.5" fill="var(--card)"></circle></svg>
+          <div class="chart-label">Task completion</div>
+          <div class="legend">
+            <span><i style="background:#2f6f4f"></i>Done</span>
+            <span><i style="background:#c1543f"></i>Missed</span>
+            <span><i style="background:#d9a441"></i>Pending</span>
+          </div>
+        </div>
+        <div class="chart-block">
+          <svg width="140" height="140" viewBox="0 0 140 140"><path d="M70,70 L70,0 A70,70 0 0 1 135.2405508497959,44.629337320140884 Z" fill="#3f7fbf"></path><path d="M70,70 L135.2405508497959,44.629337320140884 A70,70 0 1 1 69.99999999999999,0 Z" fill="#e0ddd6"></path><circle cx="70" cy="70" r="31.5" fill="var(--card)"></circle></svg>
+          <div class="chart-label">Productive hours</div>
+          <div class="legend">
+            <span><i style="background:#3f7fbf"></i>Productive</span>
+            <span><i style="background:#e0ddd6"></i>Rest of day</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="week-view" class="view" style="display:none"></div>
+  <div id="month-view" class="view" style="display:none"></div>
+
+  <div class="footer-actions">
+    <button class="pdfbtn" id="pdf-btn">⬇ Download PDF</button>
+  </div>
+  <div class="savehint">Add tasks yourself below, or just tell Claude in chat — both stay in sync.</div>
+</div>
+
+
+<div id="toast" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom, 0px));background:#1f2320;color:#fff;padding:10px 16px;border-radius:10px;font-size:0.85rem;z-index:60;max-width:90%;text-align:center;"></div>
+<div id="pdf-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:50;padding:16px;">
+  <div class="card" style="max-width:340px;width:100%;margin:0;">
+    <h2 style="margin-bottom:6px;">Download PDF of…</h2>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+      <button class="addbtn" style="padding:12px;text-align:left;" onclick="exportPDF('day')">📅 This day <span id="pdf-day-label" style="opacity:.8;font-size:.75rem;"></span></button>
+      <button class="addbtn" style="padding:12px;text-align:left;" onclick="exportPDF('week')">🗓 This week <span id="pdf-week-label" style="opacity:.8;font-size:.75rem;"></span></button>
+      <button class="addbtn" style="padding:12px;text-align:left;" onclick="exportPDF('month')">🗂 This month <span id="pdf-month-label" style="opacity:.8;font-size:.75rem;"></span></button>
+      <button class="iconbtn" style="padding:8px;" onclick="closePdfModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- STATE ----------
+// DATA is embedded and republished by Claude / by viewer edits via artifact.publish
+const DATA = {
+  "2026-09-25": [
+    {"task": "Cleaned book area", "start": null, "end": null, "durationMin": 30, "status": "done"},
+    {"task": "Washed clothes and shoes", "start": null, "end": null, "durationMin": 60, "status": "done"}
+  ],
+  "2026-09-27": [
+    {"task": "Spanish Study", "start": null, "end": null, "durationMin": null, "status": "done", "description": "Watched two videos on basic daily vocabulary — hello, how are you, nice to meet you"}
+  ],
+  "2026-09-28": [
+    {"task": "CAFDP – Fashion Model", "start": "00:00", "end": "04:00", "durationMin": null, "status": "done", "description": "Replaced cell 3 and fixed the error. Replaced and modified cells 10A, 10B, and 11B (for a different purpose).", "subtasks": [
+      {"text": "Fix duplicated code cells — cells got doubled/tripled while working; delete the extra copies", "important": true, "done": true}
+    ]},
+    {"task": "Spanish Study", "start": null, "end": null, "durationMin": 35, "status": "done", "description": "Learnt frequently used words like Hola, cómo estás, gracias, etc. Watched the same video again, this time writing notes in my notebook."},
+    {"task": "Job Research – Travel-Friendly Roles", "start": null, "end": null, "durationMin": null, "status": "missed", "description": "Look into jobs that let you travel/explore abroad, e.g. options connected to Thailand. Check the links that Purva sent."}
+  ],
+  "2026-09-29": [
+    {"task": "CAFDP – Fashion Model", "start": "00:00", "end": "02:30", "durationMin": null, "status": "done", "description": "Ran the entire pipeline, analysed all cells from 1 to 9, and modified and replaced cells 6, 7 and 8 (fixed all the issues). Stopped at 2:30 AM after hitting the GPU limit."},
+    {"task": "Spanish Study", "start": "12:00", "end": "12:30", "durationMin": null, "status": "done", "description": "Watched a video on the Spanish alphabet."},
+    {"task": "Job Research – Travel-Friendly Roles", "start": null, "end": null, "durationMin": null, "status": "missed", "description": "Didn't get to searching — postponed to Sep 30. Look into jobs that let you travel/explore abroad, e.g. options connected to Thailand. Check the links that Purva sent."},
+    {"task": "SG-WORLD V2.0 (modified version)", "start": "02:55", "end": "07:00", "durationMin": null, "status": "done", "description": "Ran the pipeline and checked the master cell. Also worked on a new section for generating longer videos. ChatGPT kept giving unworkable/hallucinated code, and the work from this session ended up ruined — will need to restart this part from scratch."},
+    {"task": "App Building – Our Space & Study/Game/Timer App", "start": null, "end": null, "durationMin": 420, "status": "done", "description": "Talked through and refined the app ideas, worked in Claude. Working on 2 apps: 1) a timer + game + study app, 2) 'Our Space' — an app for couples and friends. Got Our Space to step 2; got the study/game/timer app to roughly steps 1-2."}
+  ],
+  "2026-09-30": [
+    {"task": "CAFDP – Fashion Model", "start": null, "end": null, "durationMin": null, "status": "pending", "description": "Need to rerun the entire pipeline and evaluate after cell 8 (cells 9, 10, 10A, 11A, 11B and 11C)."},
+    {"task": "Spanish Study", "start": "20:00", "end": "21:00", "durationMin": null, "status": "done", "description": null},
+    {"task": "Job Research – Travel-Friendly Roles", "start": null, "end": null, "durationMin": null, "status": "pending", "description": "Look into jobs that let you travel/explore abroad, e.g. options connected to Thailand. Check the links that Purva sent."},
+    {"task": "App Building – Our Space", "start": null, "end": null, "durationMin": 320, "status": "done", "description": "Worked across 3 sessions today (morning, then around 10 and 11) — total 5h20m. Covered steps 3 to 5 plus other side modifications, testing the app, working in Claude, and refining the idea on ChatGPT."}
+  ],
+  "2026-10-01": [
+    {"task": "CAFDP – Fashion Model", "start": null, "end": null, "durationMin": null, "status": "pending", "description": null},
+    {"task": "Spanish Study", "start": null, "end": null, "durationMin": null, "status": "pending", "description": null},
+    {"task": "App Building – Our Space", "start": null, "end": null, "durationMin": 210, "status": "done", "description": null},
+    {"task": "App Building – Our Cozy Library", "start": "06:30", "end": "07:30", "durationMin": null, "status": "done", "description": null}
+  ],
+  "2026-10-02": [
+    {"task": "CAFDP – Fashion Model", "start": null, "end": null, "durationMin": null, "status": "pending", "description": null},
+    {"task": "Spanish Study", "start": null, "end": null, "durationMin": null, "status": "pending", "description": null},
+    {"task": "App Building – Our Space", "start": null, "end": null, "durationMin": 230, "status": "done", "description": "Worked using Claude, ChatGPT, my own app, and Chrome.", "subtasks": [
+      {"text": "Test step 8", "important": false, "done": true},
+      {"text": "Test step 9", "important": false, "done": true},
+      {"text": "Test step 10", "important": false, "done": true},
+      {"text": "Test step 11", "important": false, "done": true}
+    ]},
+    {"task": "App Building – Our Cozy Library", "start": null, "end": null, "durationMin": 90, "status": "done", "description": "Morning session."}
+  ],
+  "2026-10-03": [
+    {"task": "CAFDP – Fashion Model", "start": null, "end": null, "durationMin": null, "status": "pending", "description": null},
+    {"task": "Spanish Study", "start": null, "end": null, "durationMin": null, "status": "pending", "description": null},
+    {"task": "App Building – Our Space", "start": null, "end": null, "durationMin": 120, "status": "done", "description": "Tested the app — built in Claude, used ChatGPT, checked whether the app and the current modifications are working properly."},
+    {"task": "App Building – Our Cozy Library", "start": null, "end": null, "durationMin": 40, "status": "done", "description": null},
+    {"task": "Research Paper – India-Korea Trade", "start": null, "end": null, "durationMin": 30, "status": "done", "description": "Downloaded some papers and uploaded them to NotebookLM. Three papers still need to go in — Quantifying Trade Barriers, US-China Chip War, and Implications of Signing IITAI — but NotebookLM has a 50-source limit and I'm already at 50, so this isn't in my hands right now. Will upload once I delete some existing sources to make room."}
+  ],
+  "2026-10-04": [
+    {"task": "CAFDP – Fashion Model", "start": null, "end": null, "durationMin": null, "status": "pending", "description": null},
+    {"task": "Spanish Study", "start": null, "end": null, "durationMin": null, "status": "pending", "description": null},
+    {"task": "App Building – Our Cozy Library", "start": null, "end": null, "durationMin": 90, "status": "done", "description": null},
+    {"task": "App Building – Our Space", "start": null, "end": null, "durationMin": null, "status": "done", "description": "Can now close and open the window, and the weather changes with it. Added new emoticons. Fixed a lag glitch.\nLogin: added forgot-password so people can recover their password.\nHome page reorganized — can enter the library and check in by telling the librarian.\nCan exit two ways: through the door, or by telling the librarian then heading back to the gate. Inside the library is also more organized.\nOn leaving, get full stats — how many times you studied, how many breaks you took, etc."}
+  ]
+};
+
+let claudeArtifact = null, claudeDownloads = null;
+(async () => {
+  try {
+    claudeArtifact = await window.claude?.use?.("artifact") ?? null;
+  } catch(e) { claudeArtifact = null; }
+  try {
+    claudeDownloads = await window.claude?.use?.("downloads") ?? null;
+  } catch(e) { claudeDownloads = null; }
+})();
+
+// Tasks Piyush does every day — auto-added to each new day so he doesn't have to ask.
+const RECURRING = ["CAFDP – Fashion Model", "Spanish Study", "App Building – Our Space", "App Building – Our Cozy Library"];
+
+function localToday() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function ensureToday() {
+  const t = localToday();
+  DATA[t] = DATA[t] || [];
+  RECURRING.forEach(name => {
+    if (!DATA[t].some(x => x.task === name)) {
+      DATA[t].push({ task: name, start: null, end: null, durationMin: null, status: "pending", description: null });
+    }
+  });
+  return t;
+}
+
+function todayKey() {
+  const d = new Date();
+  return d.toISOString().slice(0,10);
+}
+function isoWeekKey(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day + 3);
+  const firstThursday = new Date(d.getFullYear(),0,4);
+  const week = 1 + Math.round(((d - firstThursday) / 86400000 - 3 + ((firstThursday.getDay()+6)%7)) / 7);
+  return d.getFullYear() + "-W" + String(week).padStart(2,"0");
+}
+function monthKey(dateStr) { return dateStr.slice(0,7); }
+
+// Weeks numbered 1-5 within each calendar month (day 1-7 = Week 1, 8-14 = Week 2, etc.)
+// instead of ISO week-of-year, so "September Week 1" etc. reads naturally.
+function monthWeekKey(dateStr) {
+  const day = Number(dateStr.slice(8,10));
+  const w = Math.ceil(day/7);
+  return dateStr.slice(0,7) + "-W" + w;
+}
+function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); } // m is 1-indexed
+function monthWeekLabel(key) {
+  const mobj = key.match(/^(\d+)-(\d+)-W(\d+)$/);
+  const y = Number(mobj[1]), mo = Number(mobj[2]), w = Number(mobj[3]);
+  const monthName = new Date(y, mo-1, 1).toLocaleString('en-US', {month:'long'});
+  return `${monthName} — Week ${w}, ${y}`;
+}
+function addMonthWeek(key, delta) {
+  const mobj = key.match(/^(\d+)-(\d+)-W(\d+)$/);
+  let y = Number(mobj[1]), m = Number(mobj[2]), w = Number(mobj[3]);
+  if (delta > 0) {
+    const dim = daysInMonth(y, m);
+    if (w*7 + 1 <= dim) { w += 1; }
+    else { m += 1; if (m > 12) { m = 1; y += 1; } w = 1; }
+  } else {
+    if (w > 1) { w -= 1; }
+    else { m -= 1; if (m < 1) { m = 12; y -= 1; } w = Math.ceil(daysInMonth(y, m)/7); }
+  }
+  return y + "-" + String(m).padStart(2,"0") + "-W" + w;
+}
+
+let currentDay = ensureToday();
+
+function allDays() { return Object.keys(DATA).sort(); }
+
+function fmtNum(n) { return Math.round(n*10)/10 % 1 === 0 ? String(Math.round(n)) : (Math.round(n*10)/10).toFixed(1); }
+
+function dayStats(dateStr) {
+  const tasks = DATA[dateStr] || [];
+  let done = 0, missed = 0, pending = 0;
+  tasks.forEach(t => {
+    const subs = t.subtasks || [];
+    if (subs.length) {
+      // Weight by subtask completion: the finished fraction counts as done,
+      // the rest follows the task's own status (missed vs. still pending).
+      const frac = subs.filter(s => s.done).length / subs.length;
+      done += frac;
+      if (t.status === "missed") missed += (1 - frac); else pending += (1 - frac);
+    } else if (t.status === "done") { done += 1; }
+    else if (t.status === "missed") { missed += 1; }
+    else { pending += 1; }
+  });
+  let productiveMinutes = 0;
+  tasks.forEach(t => {
+    if (t.status === "done" && t.start && t.end) {
+      const [sh,sm] = t.start.split(":").map(Number);
+      const [eh,em] = t.end.split(":").map(Number);
+      let mins = (eh*60+em) - (sh*60+sm);
+      if (mins > 0) productiveMinutes += mins;
+    } else if (t.status === "done" && t.durationMin) {
+      productiveMinutes += t.durationMin;
+    }
+  });
+  return { total: tasks.length, done, missed, pending, productiveMinutes };
+}
+
+function aggregate(dateStrs) {
+  let total=0, done=0, missed=0, pending=0, productiveMinutes=0;
+  dateStrs.forEach(d => {
+    const s = dayStats(d);
+    total += s.total; done += s.done; missed += s.missed; pending += s.pending;
+    productiveMinutes += s.productiveMinutes;
+  });
+  return { total, done, missed, pending, productiveMinutes };
+}
+
+// ---------- SVG PIE ----------
+function pieSVG(segments, size, holeRatio) {
+  // segments: [{value, color}]
+  const total = segments.reduce((a,s)=>a+s.value,0);
+  const r = size/2, cx=r, cy=r;
+  if (total <= 0) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${cx}" cy="${cy}" r="${r-2}" fill="none" stroke="var(--line)" stroke-width="2"/>
+      <text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="11" fill="var(--ink-soft)">no data</text>
+    </svg>`;
+  }
+  let angle = -90, paths = "";
+  segments.forEach(seg => {
+    if (seg.value <= 0) return;
+    const frac = seg.value/total;
+    const a0 = angle, a1 = angle + frac*360;
+    const large = (a1-a0) > 180 ? 1 : 0;
+    const x0 = cx + r*Math.cos(a0*Math.PI/180), y0 = cy + r*Math.sin(a0*Math.PI/180);
+    const x1 = cx + r*Math.cos(a1*Math.PI/180), y1 = cy + r*Math.sin(a1*Math.PI/180);
+    paths += `<path d="M${cx},${cy} L${x0},${y0} A${r},${r} 0 ${large} 1 ${x1},${y1} Z" fill="${seg.color}"/>`;
+    angle = a1;
+  });
+  const hole = holeRatio ? `<circle cx="${cx}" cy="${cy}" r="${r*holeRatio}" fill="var(--card)"/>` : "";
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${paths}${hole}</svg>`;
+}
+
+function taskPie(stats, size=140) {
+  return pieSVG([
+    {value: stats.done, color: "#2f6f4f"},
+    {value: stats.missed, color: "#c1543f"},
+    {value: stats.pending, color: "#d9a441"}
+  ], size, 0.45);
+}
+// ---------- TIME-BY-TASK PIE ----------
+function taskTimeByName(dayList) {
+  const map = {};
+  dayList.forEach(d => {
+    (DATA[d] || []).forEach(t => {
+      if (t.status !== "done") return;
+      let mins = 0;
+      if (t.start && t.end) {
+        const [sh,sm] = t.start.split(":").map(Number);
+        const [eh,em] = t.end.split(":").map(Number);
+        mins = Math.max(0, (eh*60+em) - (sh*60+sm));
+      } else if (t.durationMin) mins = t.durationMin;
+      if (mins <= 0) return;
+      map[t.task] = (map[t.task] || 0) + mins;
+    });
+  });
+  return Object.entries(map).map(([name, minutes]) => ({name, minutes})).sort((a,b) => b.minutes - a.minutes);
+}
+const CATEGORY_PALETTE = ["#2f6f4f","#3f7fbf","#d9a441","#c1543f","#7a5fb5","#4fa9a9","#b5577a","#8aa83f","#c98b3f","#5f7fc4"];
+function categoryColors(n) {
+  const out = CATEGORY_PALETTE.slice(0, n);
+  for (let i = out.length; i < n; i++) out.push(`hsl(${(i*47)%360} 55% 50%)`);
+  return out;
+}
+function categoryPieBlock(dayList, size) {
+  const items = taskTimeByName(dayList);
+  const total = items.reduce((a,x) => a+x.minutes, 0);
+  const colors = categoryColors(items.length);
+  const svg = pieSVG(items.map((it,i) => ({value: it.minutes, color: colors[i]})), size, 0.45);
+  const legend = items.length ? items.map((it,i) => `
+      <span><i style="background:${colors[i]}"></i>${escapeHtml(it.name)} — ${total ? Math.round(it.minutes/total*100) : 0}% (${(it.minutes/60).toFixed(1)}h)</span>`).join("") : `<span style="color:var(--ink-soft);">No completed time logged yet</span>`;
+  return `
+    <div class="chart-block" style="flex:1 1 260px;">
+      ${svg}
+      <div class="chart-label">Time by task</div>
+      <div class="legend" style="flex-direction:column;align-items:flex-start;margin-top:10px;">${legend}</div>
+    </div>`;
+}
+
+function hoursPie(stats, size=140, totalDayMinutes=1440) {
+  const productive = stats.productiveMinutes;
+  const rest = Math.max(totalDayMinutes - productive, 0);
+  return pieSVG([
+    {value: productive, color: "#3f7fbf"},
+    {value: rest, color: "#e0ddd6"}
+  ], size, 0.45);
+}
+
+// ---------- RENDER: DAY ----------
+function renderDay() {
+  const el = document.getElementById("day-view");
+  const days = allDays();
+  const stats = dayStats(currentDay);
+  const tasks = (DATA[currentDay] || []).map((t,i) => ({t, i})).sort((a,b) => (a.t.start||"99").localeCompare(b.t.start||"99"));
+
+  const rows = tasks.length ? tasks.map(({t, i}) => `
+    <tr class="${t.status}">
+      <td class="time">${t.start ? t.start + (t.end ? " – " + t.end : "") : (t.durationMin ? "~" + t.durationMin + " min" : "—")}</td>
+      <td class="task"><span class="status-dot status-${t.status}"></span>${escapeHtml(t.task)}${t.description ? `<div style="font-size:0.75rem;color:var(--ink-soft);margin-top:2px;white-space:pre-line;">${escapeHtml(t.description)}</div>` : ""}${(t.subtasks||[]).map((s,si) => `
+        <label style="display:flex;align-items:flex-start;gap:6px;margin-top:6px;padding:6px 8px;border-radius:8px;font-size:0.78rem;${s.important ? "background:rgba(193,84,63,0.12);border-left:3px solid #c1543f;color:#c1543f;font-weight:600;" : "background:var(--bg);"}text-decoration:${s.done ? "line-through" : "none"};opacity:${s.done ? 0.6 : 1};">
+          <input type="checkbox" ${s.done ? "checked" : ""} onchange="toggleSub('${currentDay}', ${i}, ${si})" style="margin-top:2px;">
+          <span style="flex:1;">${s.important ? "❗ " : ""}${escapeHtml(s.text)}</span>
+          <button type="button" class="iconbtn" style="padding:0 2px;font-size:0.8rem;" onclick="deleteSub('${currentDay}', ${i}, ${si})">🗑</button>
+        </label>`).join("")}</td>
+      <td>${t.status === "done" ? "✅" : t.status === "missed" ? "❌" : "⏳"}</td>
+      <td>
+        <button class="iconbtn" onclick="cycleStatus('${currentDay}', ${i})">↻</button>
+        <button class="iconbtn" onclick="deleteTask('${currentDay}', ${i})">🗑</button>
+      </td>
+    </tr>`).join("") : `<tr><td colspan="4" class="empty">No tasks yet for this day.</td></tr>`;
+
+  el.innerHTML = `
+    <div class="card">
+      <h2>
+        <span>Daily Log</span>
+        <select id="day-select">${days.map(d => `<option value="${d}" ${d===currentDay?"selected":""}>${fmtDate(d)}</option>`).join("")}</select>
+      </h2>
+      <div class="stat-row">
+        <div class="stat"><b>${stats.total}</b>tasks</div>
+        <div class="stat"><b>${fmtNum(stats.done)}</b>done</div>
+        <div class="stat"><b>${fmtNum(stats.missed)}</b>missed</div>
+        <div class="stat"><b>${(stats.productiveMinutes/60).toFixed(1)}h</b>productive</div>
+      </div>
+      <table>
+        <thead><tr><th>Time</th><th>Task</th><th>✓</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="addform">
+        <div class="row2">
+          <input type="time" id="new-start">
+          <input type="time" id="new-end">
+        </div>
+        <div class="row">
+          <input type="text" id="new-task" placeholder="Task description">
+          <button class="addbtn" onclick="addTask()">Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Today's Breakdown</h2>
+      <div class="charts">
+        <div class="chart-block">
+          ${taskPie(stats)}
+          <div class="chart-label">Task completion</div>
+          <div class="legend">
+            <span><i style="background:#2f6f4f"></i>Done</span>
+            <span><i style="background:#c1543f"></i>Missed</span>
+            <span><i style="background:#d9a441"></i>Pending</span>
+          </div>
+        </div>
+        <div class="chart-block">
+          ${hoursPie(stats)}
+          <div class="chart-label">Productive hours</div>
+          <div class="legend">
+            <span><i style="background:#3f7fbf"></i>Productive</span>
+            <span><i style="background:#e0ddd6"></i>Rest of day</span>
+          </div>
+        </div>
+        ${categoryPieBlock([currentDay], 140)}
+      </div>
+    </div>
+  `;
+  document.getElementById("day-select").addEventListener("change", (e) => {
+    currentDay = e.target.value; renderDay();
+  });
+}
+
+// ---------- WEEK/MONTH NAV ----------
+let currentWeekKey = null;  // e.g. "2026-W40"
+let currentMonthKey = null; // e.g. "2026-10"
+
+function addMonths(mkKey, delta) {
+  const [y, m] = mkKey.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+}
+function attachSwipe(el, onPrev, onNext) {
+  let x0 = null, y0 = null;
+  el.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, {passive:true});
+  el.addEventListener("touchend", e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)*1.5) { dx < 0 ? onNext() : onPrev(); }
+    x0 = null;
+  }, {passive:true});
+}
+function navHeader(label, canNext, onPrev, onNext) {
+  return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+    <button class="iconbtn" style="font-size:1.1rem;" onclick="(${onPrev})()">‹</button>
+    <h2 style="margin:0;">${label}</h2>
+    <button class="iconbtn" style="font-size:1.1rem;${canNext ? "" : "visibility:hidden;"}" onclick="(${onNext})()">›</button>
+  </div>`;
+}
+
+// ---------- RENDER: WEEK ----------
+function renderWeek() {
+  const el = document.getElementById("week-view");
+  const days = allDays();
+  const weeks = {};
+  days.forEach(d => { const wk = monthWeekKey(d); (weeks[wk] = weeks[wk]||[]).push(d); });
+  const weekKeys = Object.keys(weeks).sort();
+  if (!weekKeys.length) { el.innerHTML = `<div class="card"><div class="empty">No data yet.</div></div>`; return; }
+  if (!currentWeekKey || !weeks[currentWeekKey]) currentWeekKey = weekKeys[weekKeys.length-1];
+  const wkDays = weeks[currentWeekKey] || [];
+  const stats = aggregate(wkDays);
+  const canNext = currentWeekKey < weekKeys[weekKeys.length-1];
+  const dayRows = wkDays.length ? wkDays.sort().map(d => {
+    const s = dayStats(d);
+    return `<tr><td class="time">${fmtDate(d)}</td><td>${fmtNum(s.done)}/${s.total} done</td><td>${(s.productiveMinutes/60).toFixed(1)}h</td></tr>`;
+  }).join("") : `<tr><td colspan="3" class="empty">No tasks this week.</td></tr>`;
+
+  el.innerHTML = `
+    <div class="card">
+      ${navHeader(monthWeekLabel(currentWeekKey), canNext, "goWeek(-1)", "goWeek(1)")}
+      <div class="stat-row">
+        <div class="stat"><b>${stats.total}</b>tasks</div>
+        <div class="stat"><b>${fmtNum(stats.done)}</b>done</div>
+        <div class="stat"><b>${fmtNum(stats.missed)}</b>missed</div>
+        <div class="stat"><b>${(stats.productiveMinutes/60).toFixed(1)}h</b>productive</div>
+      </div>
+      <table><thead><tr><th>Day</th><th>Tasks</th><th>Hours</th></tr></thead><tbody>${dayRows}</tbody></table>
+    </div>
+    <div class="card">
+      <h2>Weekly Breakdown</h2>
+      <div class="charts">
+        <div class="chart-block">${taskPie(stats)}<div class="chart-label">Task completion</div></div>
+        <div class="chart-block">${hoursPie(stats, 140, Math.max(wkDays.length,1)*1440)}<div class="chart-label">Productive hours</div></div>
+        ${categoryPieBlock(wkDays, 140)}
+      </div>
+    </div>
+  `;
+  attachSwipe(el, () => goWeek(-1), () => goWeek(1));
+}
+function goWeek(delta) {
+  const days = allDays();
+  const weeks = {}; days.forEach(d => { const wk = monthWeekKey(d); (weeks[wk]=weeks[wk]||[]).push(d); });
+  const weekKeys = Object.keys(weeks).sort();
+  const latest = weekKeys[weekKeys.length-1];
+  const next = addMonthWeek(currentWeekKey, delta);
+  if (delta > 0 && next > latest) return;
+  currentWeekKey = next;
+  renderWeek();
+}
+
+// ---------- RENDER: MONTH ----------
+function renderMonth() {
+  const el = document.getElementById("month-view");
+  const days = allDays();
+  const months = {};
+  days.forEach(d => { const mk = monthKey(d); (months[mk] = months[mk]||[]).push(d); });
+  const monthKeys = Object.keys(months).sort();
+  if (!monthKeys.length) { el.innerHTML = `<div class="card"><div class="empty">No data yet.</div></div>`; return; }
+  if (!currentMonthKey || !months[currentMonthKey]) currentMonthKey = monthKeys[monthKeys.length-1];
+  const mDays = months[currentMonthKey] || [];
+  const stats = aggregate(mDays);
+  const canNext = currentMonthKey < monthKeys[monthKeys.length-1];
+  const weeks = {};
+  mDays.forEach(d => { const wk = monthWeekKey(d); (weeks[wk]=weeks[wk]||[]).push(d); });
+  const weekRows = Object.keys(weeks).length ? Object.keys(weeks).sort().map(wk => {
+    const s = aggregate(weeks[wk]);
+    return `<tr><td class="time">Wk ${wk.split("-W")[1]}</td><td>${fmtNum(s.done)}/${s.total} done</td><td>${(s.productiveMinutes/60).toFixed(1)}h</td></tr>`;
+  }).join("") : `<tr><td colspan="3" class="empty">No tasks this month.</td></tr>`;
+
+  el.innerHTML = `
+    <div class="card">
+      ${navHeader(new Date(currentMonthKey+"-01").toLocaleString('en-US',{month:'long', year:'numeric'}), canNext, "goMonth(-1)", "goMonth(1)")}
+      <div class="stat-row">
+        <div class="stat"><b>${stats.total}</b>tasks</div>
+        <div class="stat"><b>${fmtNum(stats.done)}</b>done</div>
+        <div class="stat"><b>${fmtNum(stats.missed)}</b>missed</div>
+        <div class="stat"><b>${(stats.productiveMinutes/60).toFixed(1)}h</b>productive</div>
+      </div>
+      <table><thead><tr><th>Week</th><th>Tasks</th><th>Hours</th></tr></thead><tbody>${weekRows}</tbody></table>
+    </div>
+    <div class="card">
+      <h2>Monthly Breakdown</h2>
+      <div class="charts">
+        <div class="chart-block">${taskPie(stats)}<div class="chart-label">Task completion</div></div>
+        <div class="chart-block">${hoursPie(stats, 140, Math.max(mDays.length,1)*1440)}<div class="chart-label">Productive hours</div></div>
+        ${categoryPieBlock(mDays, 140)}
+      </div>
+    </div>
+  `;
+  attachSwipe(el, () => goMonth(-1), () => goMonth(1));
+}
+function goMonth(delta) {
+  const days = allDays();
+  const months = {}; days.forEach(d => { const mk = monthKey(d); (months[mk]=months[mk]||[]).push(d); });
+  const monthKeys = Object.keys(months).sort();
+  const latest = monthKeys[monthKeys.length-1];
+  const next = addMonths(currentMonthKey, delta);
+  if (delta > 0 && next > latest) return;
+  currentMonthKey = next;
+  renderMonth();
+}
+
+function fmtDate(d) {
+  return new Date(d+"T00:00:00").toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+}
+function escapeHtml(s) {
+  return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- EDIT ACTIONS ----------
+async function persist() {
+  if (!claudeArtifact) return;
+  try {
+    const html = document.documentElement.outerHTML;
+    await claudeArtifact.publish("<!DOCTYPE html>\n" + html);
+  } catch(e) { /* conflict is routine; local view already reflects the edit */ }
+}
+
+function addTask() {
+  const start = document.getElementById("new-start").value;
+  const end = document.getElementById("new-end").value;
+  const task = document.getElementById("new-task").value.trim();
+  if (!task) return;
+  DATA[currentDay] = DATA[currentDay] || [];
+  DATA[currentDay].push({ task, start: start||null, end: end||null, status: "pending" });
+  renderDay();
+  persist();
+}
+function cycleStatus(day, idx) {
+  const order = ["pending","done","missed"];
+  const t = DATA[day][idx];
+  t.status = order[(order.indexOf(t.status)+1) % order.length];
+  renderDay();
+  persist();
+}
+function toggleSub(day, idx, sidx) {
+  const s = DATA[day][idx].subtasks[sidx];
+  s.done = !s.done;
+  renderDay();
+  persist();
+}
+function deleteSub(day, idx, sidx) {
+  DATA[day][idx].subtasks.splice(sidx, 1);
+  renderDay();
+  persist();
+}
+function deleteTask(day, idx) {
+  DATA[day].splice(idx,1);
+  renderDay();
+  persist();
+}
+
+// ---------- TABS ----------
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    document.querySelectorAll(".view").forEach(v => v.style.display = "none");
+    document.getElementById(tab.dataset.tab + "-view").style.display = "block";
+    if (tab.dataset.tab === "week") renderWeek();
+    if (tab.dataset.tab === "month") renderMonth();
+  });
+});
+
+// ---------- PDF EXPORT ----------
+const PC = {done:[47,111,79], missed:[193,84,63], pending:[217,164,65], prod:[63,127,191], rest:[224,221,214]};
+
+function fullDate(d) {
+  return new Date(d+"T00:00:00").toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+}
+function scopeDays(scope) {
+  const days = allDays();
+  if (scope === "day") return [currentDay];
+  if (scope === "week") { const wk = currentWeekKey || monthWeekKey(currentDay); return days.filter(d => monthWeekKey(d) === wk); }
+  const mk = currentMonthKey || monthKey(currentDay); return days.filter(d => monthKey(d) === mk);
+}
+
+function pdfPie(doc, cx, cy, r, segs) {
+  const total = segs.reduce((a,s)=>a+s.value,0);
+  if (total <= 0) {
+    doc.setDrawColor(200); doc.setLineWidth(1); doc.circle(cx, cy, r, 'S');
+    doc.setFontSize(8); doc.setTextColor(140); doc.text('no data', cx, cy+3, {align:'center'});
+    return;
+  }
+  let a0 = -Math.PI/2;
+  segs.forEach(sg => {
+    if (sg.value <= 0) return;
+    const frac = sg.value/total;
+    doc.setFillColor(...sg.color);
+    if (frac >= 0.9999) { doc.circle(cx, cy, r, 'F'); return; }
+    const a1 = a0 + frac*2*Math.PI;
+    const steps = Math.max(2, Math.ceil(frac*80));
+    const pts = [[cx,cy]];
+    for (let k=0;k<=steps;k++) { const a = a0+(a1-a0)*k/steps; pts.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]); }
+    const rel = [];
+    for (let k=1;k<pts.length;k++) rel.push([pts[k][0]-pts[k-1][0], pts[k][1]-pts[k-1][1]]);
+    doc.lines(rel, pts[0][0], pts[0][1], [1,1], 'F', true);
+    a0 = a1;
+  });
+  doc.setFillColor(255,255,255); doc.circle(cx, cy, r*0.45, 'F');
+}
+function pdfLegend(doc, x, y, items) {
+  doc.setFontSize(8);
+  items.forEach((it, i) => {
+    doc.setFillColor(...it.color); doc.rect(x, y + i*13 - 7, 8, 8, 'F');
+    doc.setTextColor(70); doc.text(it.label, x + 13, y + i*13);
+  });
+}
+function pdfChartsRow(doc, y, stats, totalMinutes, label1, label2) {
+  const W = doc.internal.pageSize.getWidth();
+  const r = 52;
+  const c1 = W*0.27, c2 = W*0.73;
+  doc.setFontSize(10); doc.setTextColor(30); doc.setFont('helvetica','bold');
+  doc.text(label1, c1, y, {align:'center'});
+  doc.text(label2, c2, y, {align:'center'});
+  doc.setFont('helvetica','normal');
+  pdfPie(doc, c1, y+18+r, r, [
+    {value:stats.done, color:PC.done}, {value:stats.missed, color:PC.missed}, {value:stats.pending, color:PC.pending}]);
+  const rest = Math.max(totalMinutes - stats.productiveMinutes, 0);
+  pdfPie(doc, c2, y+18+r, r, [
+    {value:stats.productiveMinutes, color:PC.prod}, {value:rest, color:PC.rest}]);
+  const ly = y + 18 + 2*r + 18;
+  pdfLegend(doc, c1-48, ly, [
+    {label:`Done: ${fmtNum(stats.done)}`, color:PC.done},
+    {label:`Not done: ${fmtNum(stats.missed)}`, color:PC.missed},
+    {label:`Pending: ${fmtNum(stats.pending)}`, color:PC.pending}]);
+  pdfLegend(doc, c2-48, ly, [
+    {label:`Productive: ${(stats.productiveMinutes/60).toFixed(1)} h`, color:PC.prod},
+    {label:`Rest of period: ${(rest/60).toFixed(1)} h`, color:PC.rest}]);
+  return ly + 3*13 + 10;
+}
+
+function pdfHeader(doc, title, subtitle) {
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(30);
+  doc.text(title, 40, 50);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(110);
+  doc.text(subtitle, 40, 66);
+  doc.setDrawColor(220); doc.line(40, 74, doc.internal.pageSize.getWidth()-40, 74);
+  return 92;
+}
+
+function pdfDayPage(doc, dateStr, isFirst) {
+  if (!isFirst) doc.addPage();
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const stats = dayStats(dateStr);
+  let y = pdfHeader(doc, fullDate(dateStr),
+    `${stats.total} tasks  |  ${fmtNum(stats.done)} done  |  ${fmtNum(stats.missed + stats.pending)} not done  |  ${(stats.productiveMinutes/60).toFixed(1)} h productive`);
+
+  const xT = 40, xK = 128, xD = W-135, xN = W-75, wK = xD-xK-10;
+  function tableHead() {
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(120);
+    doc.text('TIME', xT, y); doc.text('TASK', xK, y);
+    doc.text('DONE', xD, y, {align:'center'}); doc.text('NOT DONE', xN, y, {align:'center'});
+    doc.setDrawColor(220); doc.line(40, y+5, W-40, y+5);
+    doc.setFont('helvetica','normal'); y += 20;
+  }
+  tableHead();
+
+  const tasks = (DATA[dateStr]||[]).slice().sort((a,b)=>(a.start||"99").localeCompare(b.start||"99"));
+  if (!tasks.length) { doc.setFontSize(10); doc.setTextColor(140); doc.text('No tasks logged.', xK, y); y += 20; }
+
+  tasks.forEach(t => {
+    const timeTxt = t.start ? `${t.start}${t.end ? " - "+t.end : ""}` : (t.durationMin ? `~${t.durationMin} min` : "--");
+    doc.setFontSize(10);
+    const titleLines = doc.splitTextToSize(t.task, wK);
+    doc.setFontSize(8);
+    const descLines = t.description ? doc.splitTextToSize(t.description, wK) : [];
+    const subs = (t.subtasks||[]).map(sb => ({sb, lines: doc.splitTextToSize(sb.text, wK-16)}));
+    let need = titleLines.length*13 + descLines.length*10 + subs.reduce((a,x)=>a+x.lines.length*10+4,0) + 8;
+    if (y + need > H - 60) { doc.addPage(); y = 50; tableHead(); }
+    const rowTop = y;
+
+    doc.setFontSize(9); doc.setTextColor(100); doc.text(timeTxt, xT, y);
+
+    doc.setFontSize(10);
+    const isMissed = t.status === "missed";
+    doc.setTextColor(...(isMissed ? PC.missed : [30,30,30]));
+    titleLines.forEach((ln, i) => {
+      doc.text(ln, xK, y + i*13);
+      if (isMissed) { const w = doc.getTextWidth(ln); doc.setDrawColor(...PC.missed); doc.setLineWidth(0.8); doc.line(xK, y + i*13 - 3, xK + w, y + i*13 - 3); }
+    });
+    let yy = y + (titleLines.length-1)*13 + 12;
+    doc.setFontSize(8); doc.setTextColor(110);
+    descLines.forEach(ln => { doc.text(ln, xK, yy); yy += 10; });
+    subs.forEach(({sb, lines}) => {
+      yy += 2;
+      const col = sb.important ? PC.missed : [90,90,90];
+      doc.setDrawColor(...col); doc.setLineWidth(0.8); doc.rect(xK, yy-7, 7, 7, 'S');
+      if (sb.done) { doc.line(xK+1.2, yy-3.5, xK+3, yy-1.5); doc.line(xK+3, yy-1.5, xK+6, yy-6.5); }
+      doc.setTextColor(...col); doc.setFont('helvetica', sb.important ? 'bold' : 'normal');
+      lines.forEach(ln => { doc.text(ln, xK+13, yy); yy += 10; });
+      doc.setFont('helvetica','normal');
+    });
+
+    // status marks
+    const my = rowTop - 3;
+    doc.setLineWidth(1.4);
+    if (t.status === "done") {
+      doc.setDrawColor(...PC.done); doc.line(xD-5, my, xD-1.5, my+4); doc.line(xD-1.5, my+4, xD+6, my-6);
+    } else if (t.status === "missed") {
+      doc.setDrawColor(...PC.missed); doc.line(xN-5, my-5, xN+5, my+5); doc.line(xN-5, my+5, xN+5, my-5);
+    } else {
+      doc.setDrawColor(...PC.pending); doc.setLineWidth(1); doc.circle(xN, my, 4, 'S');
+    }
+    doc.setDrawColor(238); doc.setLineWidth(0.5); doc.line(40, yy-2, W-40, yy-2);
+    y = yy + 12;
+  });
+
+  if (y > H - 210) { doc.addPage(); y = 50; }
+  pdfChartsRow(doc, y + 12, stats, 1440, 'Task completion', 'Productive hours');
+}
+
+function pdfSummaryPage(doc, title, subtitle, dayList, rowsLabel) {
+  doc.addPage();
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const stats = aggregate(dayList);
+  let y = pdfHeader(doc, title, subtitle);
+  doc.setFontSize(11); doc.setTextColor(40);
+  doc.text(`${stats.total} tasks  |  ${fmtNum(stats.done)} done  |  ${fmtNum(stats.missed + stats.pending)} not done  |  ${(stats.productiveMinutes/60).toFixed(1)} h productive`, 40, y);
+  y += 12;
+  y = pdfChartsRow(doc, y + 14, stats, dayList.length*1440, 'Task completion', 'Productive hours') + 6;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(120);
+  doc.text(rowsLabel.toUpperCase(), 40, y); doc.text('DONE / TOTAL', 300, y); doc.text('PRODUCTIVE', 420, y);
+  doc.setDrawColor(220); doc.line(40, y+5, W-40, y+5);
+  doc.setFont('helvetica','normal'); y += 20;
+  const groups = rowsLabel === 'Day'
+    ? dayList.map(d => ({label: fullDate(d), days:[d]}))
+    : Object.entries(dayList.reduce((m,d)=>{ const k=monthWeekKey(d); (m[k]=m[k]||[]).push(d); return m; }, {})).sort().map(([k,v]) => ({label: `Week ${k.split("-W")[1]} (${fmtDate(v[0])} - ${fmtDate(v[v.length-1])})`, days:v}));
+  groups.forEach(g => {
+    if (y > H - 50) { doc.addPage(); y = 50; }
+    const s = aggregate(g.days);
+    doc.setFontSize(9); doc.setTextColor(50);
+    doc.text(g.label, 40, y); doc.text(`${fmtNum(s.done)} / ${s.total}`, 300, y); doc.text(`${(s.productiveMinutes/60).toFixed(1)} h`, 420, y);
+    y += 15;
+  });
+}
+
+function fmtRange(dayList) {
+  return dayList.length === 1 ? fullDate(dayList[0]) : `${fmtDate(dayList[0])} - ${fmtDate(dayList[dayList.length-1])}`;
+}
+
+function toast(msg, ms) {
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.style.display = "block";
+  clearTimeout(toast._t); toast._t = setTimeout(() => { el.style.display = "none"; }, ms || 4000);
+}
+
+async function exportPDF(scope) {
+  closePdfModal();
+  const list = scopeDays(scope);
+  if (!list.length) { toast("No data for that period yet."); return; }
+  try {
+    if (!window.jspdf) {
+      toast("Loading PDF library…", 10000);
+      const ok = await waitForJsPDF(8000);
+      if (!ok) { toast("PDF library couldn't load — check your internet connection and try again.", 7000); return; }
+    }
+    toast("Building PDF…", 15000);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:"pt", format:"a4"});
+    let first = true;
+
+    if (scope === "day") {
+      pdfDayPage(doc, list[0], true);
+    } else {
+      const byWeek = {};
+      list.forEach(d => { const k = monthWeekKey(d); (byWeek[k] = byWeek[k]||[]).push(d); });
+      Object.keys(byWeek).sort().forEach(k => {
+        byWeek[k].forEach(d => { pdfDayPage(doc, d, first); first = false; });
+      });
+    }
+
+    const buf = doc.output("arraybuffer");
+    const filename = `piyush-tracker-${scope}-${scope === "month" ? monthKey(currentDay) : currentDay}.pdf`;
+    const dl = claudeDownloads || await window.claude?.use?.("downloads");
+    if (!dl) { toast("Saving files isn't available in this view. Ask Claude in chat and it will send you the PDF.", 7000); return; }
+    await dl.save({ filename, data: buf });
+    toast("PDF saved ✓");
+  } catch (e) {
+    if (e && e.code === "declined") { toast("Download cancelled."); return; }
+    toast("PDF failed: " + ((e && (e.message || e.code)) || e), 8000);
+  }
+}
+
+function openPdfModal() {
+  document.getElementById("pdf-day-label").textContent = "(" + fmtDate(currentDay) + ")";
+  const w = scopeDays("week"), m = scopeDays("month");
+  document.getElementById("pdf-week-label").textContent = "(" + w.length + (w.length===1?" day":" days") + ")";
+  document.getElementById("pdf-month-label").textContent = "(" + m.length + (m.length===1?" day":" days") + ")";
+  document.getElementById("pdf-modal").style.display = "flex";
+}
+function closePdfModal() { document.getElementById("pdf-modal").style.display = "none"; }
+document.getElementById("pdf-btn").addEventListener("click", openPdfModal);
+document.getElementById("pdf-modal").addEventListener("click", (e) => { if (e.target.id === "pdf-modal") closePdfModal(); });
+
+// ---------- INIT ----------
+renderDay();
+persist();
+</script>
+
+
+</body></html>
